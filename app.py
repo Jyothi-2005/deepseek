@@ -167,7 +167,7 @@ def filter_think_tags(response):
     markdown=True,
   )"""
 
- def get_rag_agent():
+def get_rag_agent():
   return Agent(
     name="DeepSeek RAG Agent",
     model=Gemini(id="gemini-2.0-flash"),
