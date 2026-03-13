@@ -1,0 +1,13 @@
+streamlit
+agno
+langchain
+langchain-community
+langchain-google-genai
+chromadb
+duckduckgo-search
+pypdf
+beautifulsoup4
+requests
+ollama
+openai
+google-genai
