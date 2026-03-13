@@ -27,7 +27,8 @@ from agno.vectordb.chroma import ChromaDb
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 #from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
+#from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 # --- Set Google API Key ---
 os.environ["GOOGLE_API_KEY"] = "AIzaSyALCW_IjdY1pdn0VBsu9KSG1leu-Ki9lDs"
