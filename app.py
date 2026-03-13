@@ -25,7 +25,8 @@ from agno.vectordb.chroma import ChromaDb
 
 # Langchain for Document Parsing and RAG DB Buildng
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+#from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 
 # --- Set Google API Key ---
