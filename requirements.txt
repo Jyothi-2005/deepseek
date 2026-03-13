@@ -11,3 +11,4 @@ requests
 ollama
 openai
 google-genai
+ddgs
