@@ -12,3 +12,4 @@ ollama
 openai
 google-genai
 ddgs
+langchain-text-splitters
