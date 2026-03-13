@@ -18,7 +18,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # Agno Agentic AI Librar
 # y to Build AI Agents
 from agno.agent import Agent
-from agno.models.ollama import Ollama
+#from agno.models.ollama import Ollama
 from agno.models.google import Gemini
 from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.vectordb.chroma import ChromaDb
@@ -158,11 +158,19 @@ def filter_think_tags(response):
     """Remove content within <think> tags from the response."""
     return re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
-def get_rag_agent():
-  """Creates a RAG agent."""
+"""def get_rag_agent():
+  #Creates a RAG agent.
   return Agent(
     name="DeepSeek RAG Agent",
     model=Ollama(id=st.session_state.model_version),
+    instructions="Answer using the most relevant available information.",
+    markdown=True,
+  )"""
+
+ def get_rag_agent():
+  return Agent(
+    name="DeepSeek RAG Agent",
+    model=Gemini(id="gemini-2.0-flash"),
     instructions="Answer using the most relevant available information.",
     markdown=True,
   )
