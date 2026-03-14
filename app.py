@@ -31,7 +31,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 # --- Set Google API Key ---
-os.environ["GOOGLE_API_KEY"] = "AIzaSyALCW_IjdY1pdn0VBsu9KSG1leu-Ki9lDs"
+#os.environ["GOOGLE_API_KEY"] = "AIzaSyALCW_IjdY1pdn0VBsu9KSG1leu-Ki9lDs"
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 # --- Constants ---
 COLLECTION_NAME = "deepseek_rag"
@@ -158,14 +159,14 @@ def filter_think_tags(response):
     """Remove content within <think> tags from the response."""
     return re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
-"""def get_rag_agent():
+#def get_rag_agent():
   #Creates a RAG agent.
-  return Agent(
-    name="DeepSeek RAG Agent",
-    model=Ollama(id=st.session_state.model_version),
-    instructions="Answer using the most relevant available information.",
-    markdown=True,
-  )"""
+ # return Agent(
+  #  name="DeepSeek RAG Agent",
+   # model=Ollama(id=st.session_state.model_version),
+    #instructions="Answer using the most relevant available information.",
+    #markdown=True,
+  )
 
 def get_rag_agent():
   return Agent(
