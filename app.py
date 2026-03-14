@@ -159,15 +159,6 @@ def filter_think_tags(response):
     """Remove content within <think> tags from the response."""
     return re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
-#def get_rag_agent():
-  #Creates a RAG agent.
- # return Agent(
-  #  name="DeepSeek RAG Agent",
-   # model=Ollama(id=st.session_state.model_version),
-    #instructions="Answer using the most relevant available information.",
-    #markdown=True,
-  )
-
 def get_rag_agent():
   return Agent(
     name="DeepSeek RAG Agent",
