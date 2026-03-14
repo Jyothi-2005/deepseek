@@ -147,7 +147,7 @@ def get_web_search_agent():
   """Creates a web search agent using DuckDuckGo."""
   return Agent(
     name="Web Search Agent",
-    model=Gemini(id="gemini-1.5-flash"),
+    model=Gemini(id="gemini-1.5-flash-latest"),
     tools=[DuckDuckGoTools()],
     instructions="Search the web using DuckDuckGo and summarize key points.",
     markdown=True,
@@ -162,7 +162,7 @@ def filter_think_tags(response):
 def get_rag_agent():
   return Agent(
     name="DeepSeek RAG Agent",
-    model=Gemini(id="gemini-1.5-flash"),
+    model=Gemini(id="gemini-1.5-flash-latest"),
     instructions="Answer using the most relevant available information.",
     markdown=True,
   )
