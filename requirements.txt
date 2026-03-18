@@ -16,3 +16,4 @@ reportlab
 requests
 beautifulsoup4
 lxml
+ddgs
