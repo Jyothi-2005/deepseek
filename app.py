@@ -1,9 +1,11 @@
+#Final Working File
 import asyncio
 import uuid
 import json
 import re
 import io
 import os
+import time
 import tempfile
 from datetime import datetime
 
@@ -17,6 +19,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
+import google.generativeai as genai
 import streamlit as st
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from agno.agent import Agent
@@ -27,7 +30,8 @@ from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+os.environ["GOOGLE_API_KEY"] = "AIzaSyAjW6g4ihTTHrZKy0pG-7lxxQKTlylR_BQ"
+genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 
 COLLECTION_NAME = "deepseek_rag"
 EMBEDDING_MODEL = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -184,6 +188,61 @@ div[class*="element-container"]::before,  div[class*="element-container"]::after
     letter-spacing: 0.08em; font-family: 'Exo 2', sans-serif;
 }
 
+/* ── Tabs styling ── */
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
+    background: rgba(13,34,71,0.60) !important;
+    border-radius: 10px !important;
+    padding: 3px !important;
+    gap: 2px !important;
+    border: 1px solid rgba(0,212,255,0.18) !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    border-radius: 7px !important;
+    font-family: 'Exo 2', sans-serif !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    padding: 6px 10px !important;
+    border: none !important;
+    flex: 1 !important;
+    justify-content: center !important;
+    transition: all .2s ease !important;
+}
+[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, var(--navy-accent), var(--navy-light)) !important;
+    color: var(--cyan-glow) !important;
+    -webkit-text-fill-color: var(--cyan-glow) !important;
+    box-shadow: 0 0 10px rgba(0,212,255,0.3) !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab-highlight"] {
+    display: none !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab-border"] {
+    display: none !important;
+}
+
+/* Video/Audio card */
+.video-summary-card {
+    background: rgba(13,34,71,0.75);
+    border: 1px solid rgba(0,212,255,0.25);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 8px;
+}
+.video-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #1e4db7, #00d4ff);
+    color: #020b18 !important;
+    -webkit-text-fill-color: #020b18 !important;
+    font-size: 0.70rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-bottom: 6px;
+    font-family: 'Exo 2', sans-serif;
+}
+
 div[data-testid="stToggle"],
 div[data-testid="stToggle"] > div,
 div[data-testid="stToggle"] > label,
@@ -226,7 +285,7 @@ h1 {
     -webkit-background-clip: text !important;
     -webkit-text-fill-color: transparent !important;
     background-clip: text !important;
-    text-align: center !important;   
+    text-align: center !important;
     width: 100% !important;
 }
 h2,h3,h4,h5 { color: var(--cyan-soft) !important; font-family:'Exo 2',sans-serif !important; }
@@ -462,12 +521,15 @@ session_defaults = {
     "suggestion_clicked": None,
     "cached_suggestions": [],
     "suggestions_for_msg": "",
-    # Download state (full conversation)
-    "dl_pdf_bytes":    None,
-    "dl_audio_bytes":  None,
-    "dl_pdf_error":    None,
-    "dl_audio_error":  None,
-    "dl_timestamp":    "",
+    "dl_pdf_bytes":        None,
+    "dl_audio_bytes":      None,
+    "dl_pdf_error":        None,
+    "dl_audio_error":      None,
+    "dl_timestamp":        "",
+    "video_summary":       "",
+    "video_file_name":     "",
+    "video_gemini_name":   "",
+    "video_active":        False,
 }
 for k, v in session_defaults.items():
     if k not in st.session_state:
@@ -495,7 +557,6 @@ def _save_current_conversation():
         "messages":   list(st.session_state.history),
         "created_at": existing.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M")),
     }
-    # LIMIT TO 10 CHATS
     if len(st.session_state.conversations) > 10:
         sorted_convs = sorted(
             st.session_state.conversations.items(),
@@ -507,18 +568,18 @@ def _save_current_conversation():
 
 
 def _reset_chat_state():
-    st.session_state.quiz_data       = None
-    st.session_state.quiz_answers    = {}
-    st.session_state.quiz_submitted  = False
+    st.session_state.quiz_data           = None
+    st.session_state.quiz_answers        = {}
+    st.session_state.quiz_submitted      = False
     st.session_state.suggestion_clicked  = None
     st.session_state.cached_suggestions  = []
     st.session_state.suggestions_for_msg = ""
-    st.session_state.dl_pdf_bytes    = None
-    st.session_state.dl_audio_bytes  = None
-    st.session_state.dl_pdf_error    = None
-    st.session_state.dl_audio_error  = None
-    st.session_state.last_response   = ""
-    st.session_state.last_question   = ""
+    st.session_state.dl_pdf_bytes        = None
+    st.session_state.dl_audio_bytes      = None
+    st.session_state.dl_pdf_error        = None
+    st.session_state.dl_audio_error      = None
+    st.session_state.last_response       = ""
+    st.session_state.last_question       = ""
 
 
 def new_conversation():
@@ -587,7 +648,7 @@ def process_pdf(uploaded_file):
                                 "page": d.metadata.get("page", "unknown")})
         return split_texts(docs)
     except Exception as e:
-        st.error(f"📄 PDF processing error: {e}")
+        st.error(f"PDF processing error: {e}")
         return []
 
 
@@ -601,8 +662,113 @@ def process_web(url: str):
             d.metadata.update({"source": url, "timestamp": datetime.now().isoformat()})
         return split_texts(docs)
     except Exception as e:
-        st.error(f"🌐 Web processing error: {e}")
+        st.error(f"Web processing error: {e}")
         return []
+
+
+# ══════════════════════════════════════════════
+# VIDEO / AUDIO PROCESSING
+# ══════════════════════════════════════════════
+SUPPORTED_VIDEO_TYPES = {
+    ".mp4":  "video/mp4",
+    ".mov":  "video/quicktime",
+    ".avi":  "video/x-msvideo",
+    ".mkv":  "video/x-matroska",
+    ".webm": "video/webm",
+    ".flv":  "video/x-flv",
+    ".wmv":  "video/x-ms-wmv",
+    ".mp3":  "audio/mpeg",
+}
+
+
+def _upload_to_gemini(tmp_path: str, mime_type: str):
+    """Upload file to Gemini Files API and wait until ACTIVE."""
+    uploaded = genai.upload_file(path=tmp_path, mime_type=mime_type)
+    max_wait, waited = 300, 0
+    while uploaded.state.name == "PROCESSING" and waited < max_wait:
+        time.sleep(4)
+        uploaded = genai.get_file(uploaded.name)
+        waited += 4
+    if uploaded.state.name != "ACTIVE":
+        raise RuntimeError(f"File processing timed out (state: {uploaded.state.name})")
+    return uploaded
+
+
+def process_video(uploaded_file) -> tuple[str, str]:
+    """Upload video/audio to Gemini and return (gemini_file_name, summary_text)."""
+    suffix = os.path.splitext(uploaded_file.name)[1].lower() or ".mp4"
+    mime   = SUPPORTED_VIDEO_TYPES.get(suffix, "video/mp4")
+    is_audio = suffix == ".mp3"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(uploaded_file.read())
+        tmp_path = tmp.name
+
+    try:
+        gem_file = _upload_to_gemini(tmp_path, mime)
+        model    = genai.GenerativeModel(model_name=FAST_MODEL)
+
+        if is_audio:
+            prompt = (
+                "Provide a thorough, structured summary of this audio file. Include:\n"
+                "1. **Overview** — what the audio is about in 2–3 sentences.\n"
+                "2. **Key Topics & Points** — bullet list of every major topic or discussion point.\n"
+                "3. **Important Details** — any names, facts, statistics, or examples mentioned.\n"
+                "4. **Conclusions / Takeaways** — main messages or outcomes.\n\n"
+                "Be thorough — your summary will be used to answer detailed questions about the audio."
+            )
+        else:
+            prompt = (
+                "Provide a thorough, structured summary of this video. Include:\n"
+                "1. **Overview** — what the video is about in 2–3 sentences.\n"
+                "2. **Key Topics & Points** — bullet list of every major topic, concept, "
+                "   fact, or demonstration covered.\n"
+                "3. **Important Details** — any names, statistics, examples, or steps mentioned.\n"
+                "4. **Conclusions / Takeaways** — main messages or outcomes.\n\n"
+                "Be thorough — your summary will be used to answer detailed questions about the video."
+            )
+
+        summary = model.generate_content([gem_file, prompt])
+        return gem_file.name, summary.text
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def answer_video_question(question: str, history_context: str) -> str:
+    """Answer a question about the uploaded video/audio."""
+    gemini_name = st.session_state.video_gemini_name
+    summary     = st.session_state.video_summary
+
+    qa_prompt = (
+        f"{history_context}\n\n" if history_context else ""
+    ) + f"Question about the file: {question}\n\nAnswer in detail."
+
+    # Try live Gemini file Q&A first
+    if gemini_name:
+        try:
+            gem_file = genai.get_file(gemini_name)
+            if gem_file.state.name == "ACTIVE":
+                model = genai.GenerativeModel(model_name=FAST_MODEL)
+                resp  = model.generate_content([gem_file, qa_prompt])
+                return resp.text
+        except Exception:
+            pass
+
+    # Fallback to summary-based Q&A
+    if summary:
+        return Agent(
+            name="Media QA Agent", model=Gemini(id=FAST_MODEL),
+            instructions=(
+                "You are a media analysis assistant. Answer questions using the "
+                "provided summary. Be specific and detailed."
+            ),
+            markdown=True,
+        ).run(f"File Summary:\n{summary}\n\n{qa_prompt}").content
+
+    return "⚠️ No media context available. Please upload a video or audio file first."
 
 
 # ══════════════════════════════════════════════
@@ -671,7 +837,6 @@ def get_or_generate_suggestions() -> list:
     if st.session_state.cached_suggestions and st.session_state.suggestions_for_msg == last_msg:
         return st.session_state.cached_suggestions
     try:
-        # Use more context — last 8 messages, more chars per message
         ctx = "\n".join(
             f"{'User' if m['role']=='user' else 'Assistant'}: {m['content'][:400]}"
             for m in st.session_state.history[-8:]
@@ -687,7 +852,7 @@ def get_or_generate_suggestions() -> list:
     except Exception:
         suggestions = ["Explain this in detail", "Give examples",
                        "What are the benefits?", "Compare with alternatives"]
-    st.session_state.cached_suggestions = suggestions
+    st.session_state.cached_suggestions  = suggestions
     st.session_state.suggestions_for_msg = last_msg
     return suggestions
 
@@ -721,15 +886,13 @@ def build_quiz_context() -> str:
 
 
 # ══════════════════════════════════════════════
-# PDF / AUDIO GENERATORS  —  FULL CONVERSATION
+# PDF / AUDIO GENERATORS — FULL CONVERSATION
 # ══════════════════════════════════════════════
 def _safe_para(text: str) -> str:
-    """Escape XML special chars for ReportLab."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def generate_full_conversation_pdf(history: list) -> bytes:
-    """Generate a PDF containing the entire Q&A conversation."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=letter,
@@ -766,19 +929,18 @@ def generate_full_conversation_pdf(history: list) -> bytes:
     )
 
     story: list = [
-        Paragraph("Gemini RAG Agent — Full Conversation", style_title),
+        Paragraph("ThinkHub — Full Conversation", style_title),
         Paragraph(
             f"Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · "
             f"{len([m for m in history if m['role']=='user'])} question(s)",
             style_meta,
         ),
-        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a73e8"),
-                   spaceAfter=10),
+        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a73e8"), spaceAfter=10),
     ]
 
     q_num = 0
     for msg in history:
-        role = msg.get("role", "")
+        role    = msg.get("role", "")
         content = filter_think_tags(msg.get("content", "")).strip()
         if not content:
             continue
@@ -805,7 +967,6 @@ def generate_full_conversation_pdf(history: list) -> bytes:
 
 
 def generate_full_conversation_audio(history: list) -> bytes:
-    """Concatenate all Q&A turns into a single audio file."""
     from gtts import gTTS
     lines = []
     q_num = 0
@@ -920,7 +1081,6 @@ st.session_state.use_web_search = st.sidebar.checkbox(
     "Enable Internet if Needed", value=st.session_state.use_web_search
 )
 
-
 # ── Quiz Generator ────────────────────────────────────────────────
 st.sidebar.header("📝 Quiz Generator")
 if st.sidebar.button("Generate Quiz"):
@@ -928,8 +1088,8 @@ if st.sidebar.button("Generate Quiz"):
         with st.spinner("Generating quiz..."):
             quiz_text = generate_quiz(build_quiz_context())
         try:
-            st.session_state.quiz_data = extract_json(quiz_text)
-            st.session_state.quiz_answers  = {}
+            st.session_state.quiz_data      = extract_json(quiz_text)
+            st.session_state.quiz_answers   = {}
             st.session_state.quiz_submitted = False
             st.sidebar.success("Quiz ready! Scroll down.")
         except Exception as e:
@@ -938,33 +1098,158 @@ if st.sidebar.button("Generate Quiz"):
     else:
         st.sidebar.warning("Ask some questions first.")
 
-# ── File Upload ───────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════
+# ── HORIZONTAL TABS: 📄 PDF | 🌐 URL | 🎬 Video ──────────────────
+# ══════════════════════════════════════════════════════════════════
 if st.session_state.rag_enabled:
     chroma_client = init_chroma()
     st.sidebar.header("📁 Upload Your Files")
-    uploaded_file = st.sidebar.file_uploader("Upload PDF", type=["pdf"])
-    web_url       = st.sidebar.text_input("Enter a URL")
 
-    if uploaded_file and uploaded_file.name not in st.session_state.processed_documents:
-        data = process_pdf(uploaded_file)
-        if data:
-            ids = [str(uuid.uuid4()) for _ in data]
-            col = chroma_client.client.get_collection(name=COLLECTION_NAME)
-            col.add(ids=ids, documents=[d.page_content for d in data],
-                    metadatas=[d.metadata for d in data])
-            st.session_state.processed_documents.append(uploaded_file.name)
-            st.sidebar.success(f"✅ {uploaded_file.name} processed!")
+    tab_pdf, tab_url, tab_video = st.sidebar.tabs(["📄 PDF", "🌐 URL", "🎬 Video"])
 
-    if (web_url and st.sidebar.button("Process URL")
-            and web_url not in st.session_state.processed_documents):
-        texts = process_web(web_url)
-        if texts:
-            ids = [str(uuid.uuid4()) for _ in texts]
-            col = chroma_client.client.get_collection(name=COLLECTION_NAME)
-            col.add(ids=ids, documents=[d.page_content for d in texts],
-                    metadatas=[d.metadata for d in texts])
-            st.session_state.processed_documents.append(web_url)
-            st.sidebar.success("URL processed!")
+    # ── Tab 1: PDF ────────────────────────────────────────────────
+    with tab_pdf:
+        uploaded_file = st.file_uploader(
+            "Upload PDF", type=["pdf"], key="pdf_uploader",
+            label_visibility="collapsed",
+        )
+        if uploaded_file and uploaded_file.name not in st.session_state.processed_documents:
+            data = process_pdf(uploaded_file)
+            if data:
+                ids = [str(uuid.uuid4()) for _ in data]
+                col = chroma_client.client.get_collection(name=COLLECTION_NAME)
+                col.add(
+                    ids=ids,
+                    documents=[d.page_content for d in data],
+                    metadatas=[d.metadata for d in data],
+                )
+                st.session_state.processed_documents.append(uploaded_file.name)
+                st.success(f"✅ {uploaded_file.name} processed!")
+
+    # ── Tab 2: URL ────────────────────────────────────────────────
+    with tab_url:
+        web_url = st.text_input(
+            "Enter a URL", placeholder="https://example.com",
+            key="url_input", label_visibility="collapsed",
+        )
+        if web_url and st.button("Process URL", key="process_url_btn"):
+            if web_url not in st.session_state.processed_documents:
+                texts = process_web(web_url)
+                if texts:
+                    ids = [str(uuid.uuid4()) for _ in texts]
+                    col = chroma_client.client.get_collection(name=COLLECTION_NAME)
+                    col.add(
+                        ids=ids,
+                        documents=[d.page_content for d in texts],
+                        metadatas=[d.metadata for d in texts],
+                    )
+                    st.session_state.processed_documents.append(web_url)
+                    st.success("✅ URL processed!")
+            else:
+                st.info("This URL has already been processed.")
+
+    # ── Tab 3: Video / Audio ──────────────────────────────────────
+    with tab_video:
+
+        # Supported formats card — always visible
+        st.markdown(
+            """
+            <div style='
+                background: rgba(0,212,255,0.06);
+                border: 1px solid rgba(0,212,255,0.22);
+                border-radius: 8px;
+                padding: 9px 12px 8px;
+                margin-bottom: 10px;
+                font-family: "Exo 2", sans-serif;
+                font-size: 0.74rem;
+                line-height: 1.9;
+            '>
+                <span style='color:#00d4ff;font-weight:700;font-size:0.78rem;'>
+                    📋 Supported Formats
+                </span><br>
+                <span style='color:#fbbf24;'>🎬 Video:</span>&nbsp;
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.mp4</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.mov</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.avi</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.mkv</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.webm</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.flv</code>
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.wmv</code>
+                <br>
+                <span style='color:#fbbf24;'>🎵 Audio:</span>&nbsp;
+                <code style='background:rgba(0,212,255,.12);color:#7dd3fc;padding:1px 5px;border-radius:4px;font-size:0.72rem'>.mp3</code>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        uploaded_video = st.file_uploader(
+            "Upload Video / Audio",
+            type=["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "mp3"],
+            key="video_uploader",
+            label_visibility="collapsed",
+        )
+
+        if uploaded_video:
+            if uploaded_video.name != st.session_state.video_file_name:
+                is_audio    = uploaded_video.name.lower().endswith(".mp3")
+                spinner_msg = (
+                    "🎵 Uploading & analysing audio… this may take a moment."
+                    if is_audio else
+                    "🎬 Uploading & analysing video… this may take a minute."
+                )
+                with st.spinner(spinner_msg):
+                    try:
+                        gem_name, summary = process_video(uploaded_video)
+                        st.session_state.video_gemini_name = gem_name
+                        st.session_state.video_summary     = summary
+                        st.session_state.video_file_name   = uploaded_video.name
+                        st.session_state.video_active      = True
+
+                        media_label = "Audio" if is_audio else "Video"
+                        intro = (
+                            f"{'🎵' if is_audio else '🎬'} **{media_label} uploaded:** "
+                            f"`{uploaded_video.name}`\n\n"
+                            f"Here's my summary:\n\n{summary}\n\n"
+                            f"---\n*You can now ask me anything about this {media_label.lower()}!*"
+                        )
+                        st.session_state.history.append({"role": "assistant", "content": intro})
+                        st.session_state.last_response = intro
+                        _save_current_conversation()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Processing failed: {e}")
+            else:
+                is_audio = uploaded_video.name.lower().endswith(".mp3")
+                st.markdown(
+                    f"<div class='video-summary-card'>"
+                    f"<span class='video-badge'>{'🎵' if is_audio else '🎬'} LOADED</span><br>"
+                    f"<small style='color:#94b8d4'>{uploaded_video.name}</small>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button("🔄 Re-analyse", key="reanalyse_btn"):
+                    st.session_state.video_file_name = ""
+                    st.rerun()
+
+        # Active file indicator
+        if st.session_state.video_active and st.session_state.video_file_name:
+            is_audio = st.session_state.video_file_name.lower().endswith(".mp3")
+            st.markdown(
+                f"<div class='video-summary-card'>"
+                f"<span class='video-badge'>✅ ACTIVE</span><br>"
+                f"<small style='color:#94b8d4'>{st.session_state.video_file_name}</small>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button("🗑 Clear File", key="clear_video_btn"):
+                st.session_state.video_summary     = ""
+                st.session_state.video_file_name   = ""
+                st.session_state.video_gemini_name = ""
+                st.session_state.video_active      = False
+                st.rerun()
+
 else:
     chroma_client = init_chroma()
 
@@ -991,9 +1276,13 @@ if st.session_state.history:
 # ── Input row ─────────────────────────────────────────────────────
 chat_col, toggle_col = st.columns([0.89, 0.11])
 with chat_col:
-    text_prompt = st.chat_input(
-        "Ask your question..." if st.session_state.rag_enabled else "Ask me anything..."
-    )
+    if st.session_state.video_active and st.session_state.video_file_name:
+        placeholder = f"Ask about '{st.session_state.video_file_name}'…"
+    elif st.session_state.rag_enabled:
+        placeholder = "Ask your question…"
+    else:
+        placeholder = "Ask me anything…"
+    text_prompt = st.chat_input(placeholder)
 with toggle_col:
     st.markdown("<div style='padding-top:8px'>", unsafe_allow_html=True)
     st.session_state.force_web_search = st.toggle(
@@ -1022,67 +1311,81 @@ if prompt:
     st.session_state.cached_suggestions  = []
     st.session_state.suggestions_for_msg = ""
 
-    context = ""
-
-    if not st.session_state.force_web_search and st.session_state.rag_enabled:
-        docs, _, has_docs = retrieve_documents(
-            prompt, chroma_client, COLLECTION_NAME, st.session_state.similarity_threshold
-        )
-        if has_docs:
-            context = "\n\n".join(docs)
-
-    if (st.session_state.force_web_search or not context) and st.session_state.use_web_search:
-        with st.spinner("🔍 Searching the web..."):
-            try:
-                web_content = get_web_search_agent().run(prompt).content
-                if web_content:
-                    context = f"Web information:\n\n{web_content}"
-            except Exception as web_err:
-                e = str(web_err)
-                if "429" in e or "quota" in e.lower() or "RESOURCE_EXHAUSTED" in e:
-                    st.warning("⚠️ Web search temporarily unavailable — API quota reached.")
-                else:
-                    st.warning("⚠️ Web search failed. Answering from general knowledge.")
-
-    # ── FIX 1: Build conversation history for context-aware answers ──
-    # Exclude the current user message (last item) — include up to 8 prior turns
-    prior_turns = st.session_state.history[:-1][-8:]
+    prior_turns     = st.session_state.history[:-1][-8:]
     history_context = "\n".join(
         f"{'User' if m['role'] == 'user' else 'Assistant'}: "
         f"{filter_think_tags(m['content'])[:400]}"
         for m in prior_turns
     )
 
-    with st.spinner("🤖 Generating response..."):
-        try:
-            full_prompt = ""
-            if history_context:
-                full_prompt += f"Previous conversation:\n{history_context}\n\n"
-            if context:
-                full_prompt += f"Context:\n{context}\n\n"
-            full_prompt += (
-                f"Question:\n{prompt}\n\n"
-                "Answer using the conversation history and context if available, "
-                "otherwise use general knowledge. Stay consistent with prior answers."
+    response = ""
+
+    # Priority 1: Video / Audio mode
+    if st.session_state.video_active and st.session_state.video_summary:
+        is_audio = st.session_state.video_file_name.lower().endswith(".mp3")
+        with st.spinner("🎵 Analysing audio…" if is_audio else "🎬 Analysing video…"):
+            try:
+                response = answer_video_question(prompt, history_context)
+            except Exception as ve:
+                e = str(ve)
+                if "429" in e or "quota" in e.lower():
+                    response = "⚠️ **API Quota Exceeded** — please wait a moment and try again."
+                else:
+                    response = f"⚠️ Media Q&A error: {e}"
+
+    else:
+        # Priority 2: RAG / Web / General
+        context = ""
+
+        if not st.session_state.force_web_search and st.session_state.rag_enabled:
+            docs, _, has_docs = retrieve_documents(
+                prompt, chroma_client, COLLECTION_NAME, st.session_state.similarity_threshold
             )
-            response = get_rag_agent().run(full_prompt).content
-        except Exception as gen_err:
-            e = str(gen_err)
-            if "429" in e or "quota" in e.lower() or "RESOURCE_EXHAUSTED" in e:
-                response = (
-                    "⚠️ **API Quota Exceeded**\n\n"
-                    "The Gemini free-tier request limit has been reached. "
-                    "Please wait a few minutes and try again."
+            if has_docs:
+                context = "\n\n".join(docs)
+
+        if (st.session_state.force_web_search or not context) and st.session_state.use_web_search:
+            with st.spinner("🔍 Searching the web…"):
+                try:
+                    web_content = get_web_search_agent().run(prompt).content
+                    if web_content:
+                        context = f"Web information:\n\n{web_content}"
+                except Exception as web_err:
+                    e = str(web_err)
+                    if "429" in e or "quota" in e.lower() or "RESOURCE_EXHAUSTED" in e:
+                        st.warning("⚠️ Web search temporarily unavailable — API quota reached.")
+                    else:
+                        st.warning("⚠️ Web search failed. Answering from general knowledge.")
+
+        with st.spinner("🤖 Generating response…"):
+            try:
+                full_prompt = ""
+                if history_context:
+                    full_prompt += f"Previous conversation:\n{history_context}\n\n"
+                if context:
+                    full_prompt += f"Context:\n{context}\n\n"
+                full_prompt += (
+                    f"Question:\n{prompt}\n\n"
+                    "Answer using the conversation history and context if available, "
+                    "otherwise use general knowledge. Stay consistent with prior answers."
                 )
-            else:
-                response = "⚠️ **Error generating response.** Please try again."
+                response = get_rag_agent().run(full_prompt).content
+            except Exception as gen_err:
+                e = str(gen_err)
+                if "429" in e or "quota" in e.lower() or "RESOURCE_EXHAUSTED" in e:
+                    response = (
+                        "⚠️ **API Quota Exceeded**\n\n"
+                        "The Gemini free-tier request limit has been reached. "
+                        "Please wait a few minutes and try again."
+                    )
+                else:
+                    response = "⚠️ **Error generating response.** Please try again."
 
     clean_response = filter_think_tags(response)
-
     st.session_state.history.append({"role": "assistant", "content": clean_response})
     st.session_state.last_response = clean_response
 
-    # ── Pre-generate FULL CONVERSATION downloads ──────────────────
+    # Pre-generate downloads
     ts = datetime.now().strftime("%H%M%S")
     st.session_state.dl_timestamp = ts
     try:
@@ -1107,7 +1410,7 @@ else:
 
 
 # ══════════════════════════════════════════════
-# PERSISTENT DOWNLOAD SECTION  (full conversation)
+# PERSISTENT DOWNLOAD SECTION
 # ══════════════════════════════════════════════
 if st.session_state.last_response:
     st.markdown(
@@ -1184,9 +1487,9 @@ if st.session_state.quiz_data:
         score = 0
         st.subheader("📊 Quiz Results")
         for i, q in enumerate(st.session_state.quiz_data):
-            user_ans = st.session_state.quiz_answers.get(i)
+            user_ans   = st.session_state.quiz_answers.get(i)
             st.markdown(f"**Q{i+1}. {q['question']}**")
-            correct = q["answer"].strip()
+            correct    = q["answer"].strip()
             user_check = (user_ans or "").strip()
             if user_check == correct or user_check.startswith(correct):
                 st.success(f"✅ Correct — {user_ans}")
