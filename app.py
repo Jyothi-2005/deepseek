@@ -30,7 +30,7 @@ from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-os.environ["GOOGLE_API_KEY"] = "AIzaSyAjW6g4ihTTHrZKy0pG-7lxxQKTlylR_BQ"
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 
 COLLECTION_NAME = "deepseek_rag"
