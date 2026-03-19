@@ -501,9 +501,9 @@ def _save_current_conversation():
             st.session_state.conversations.items(),
             key=lambda x: x[1].get("created_at", "")
         )
-    while len(sorted_convs) > 10:
-        oldest_id, _ = sorted_convs.pop(0)
-        del st.session_state.conversations[oldest_id]
+        while len(sorted_convs) > 10:
+            oldest_id, _ = sorted_convs.pop(0)
+            del st.session_state.conversations[oldest_id]
 
 
 def _reset_chat_state():
